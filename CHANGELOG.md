@@ -4,6 +4,10 @@
 
 # 1.X (current)
 
+## 1.6.0
+- Removed unnecessary commands and audio dependencies from the repository (now considered as advanced topics)
+- Made many changes to the bot
+
 ## 1.5.21
 - Bumped `twemoji` dependency to version 12 and remove its file system lookups
 - Added "float" argument type for floating-point numbers
