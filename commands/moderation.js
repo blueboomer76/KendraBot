@@ -122,7 +122,7 @@ module.exports = [
 
 			if (!flags.some(f => f.name == "yes")) {
 				const promptRes = await promptor.prompt(message, `You are about to ban the user **${member.user.tag}** from this server.`);
-				if (promptRes) return {cmdWarn: promptRes};
+				if (promptRes.error) return {cmdWarn: promptRes.error};
 			}
 
 			member.ban({
@@ -234,7 +234,7 @@ module.exports = [
 			if (channel.createdTimestamp + 1.5552e+10 < Date.now() && !flags.some(f => f.name == "yes")) {
 				const promptRes = await promptor.prompt(message,
 					`You are about to delete the channel **${channel.name}** (ID ${channel.id}), which is more than 180 days old.`);
-				if (promptRes) return {cmdWarn: promptRes};
+				if (promptRes.error) return {cmdWarn: promptRes.error};
 			}
 
 			channel.delete()
@@ -281,7 +281,7 @@ module.exports = [
 			if (role.members.size > 10 && role.members.size > message.guild.memberCount / 10 && !flags.some(f => f.name == "yes")) {
 				const promptRes = await promptor.prompt(message,
 					`You are about to delete the role **${role.name}** (ID ${role.id}), which more than 10% of the members in this server have.`);
-				if (promptRes) return {cmdWarn: promptRes};
+				if (promptRes.error) return {cmdWarn: promptRes.error};
 			}
 
 			role.delete()
@@ -408,7 +408,7 @@ module.exports = [
 
 			if (!flags.some(f => f.name == "yes")) {
 				const promptRes = await promptor.prompt(message, `You are about to kick the user **${member.user.tag}** from this server.`);
-				if (promptRes) return {cmdWarn: promptRes};
+				if (promptRes.error) return {cmdWarn: promptRes.error};
 			}
 
 			member.kick(reasonFlag ? reasonFlag.args : null)
@@ -510,7 +510,7 @@ module.exports = [
 		constructor() {
 			super({
 				name: "purge",
-				description: "Deletes messages from this channel. You can specify options for deleting from 1-100 messages to refine the messages selected",
+				description: "Deletes messages from this channel. You can specify options to refine the deleted messages",
 				aliases: ["clear", "prune"],
 				args: [
 					{
@@ -558,21 +558,33 @@ module.exports = [
 					user: ["MANAGE_MESSAGES"],
 					level: 0
 				},
-				usage: "purge <1-500> OR purge <1-100> [attachments] [bots] [embeds] [images] [invites] [left] [links] [mentions] [reactions] " +
+				usage: "purge <1-500> [attachments] [bots] [embeds] [images] [invites] [left] [links] [mentions] [reactions] " +
 					"[--user <user>] [--text <text>] [--invert] [--no-delete]"
 			});
-			this.options = ["attachments", "bots", "embeds", "images", "invites", "left", "links", "mentions", "reactions"];
+
+			this.filters = {
+				attachments: msg => msg.attachments.size > 0,
+				bots: msg => msg.author.bot,
+				embeds: msg => msg.embeds[0],
+				images: msg => msg.embeds[0] && (msg.embeds[0].type == "image" || msg.embeds[0].image),
+				invites: msg => /(www\.)?(discord\.(gg|me|io)|discordapp\.com\/invite)\/[0-9a-z]+/gi.test(msg.content),
+				left: msg => msg.member == null,
+				links: msg => /https?:\/\/\S+\.\S+/gi.test(msg.content) ||
+					(msg.embeds[0] && msg.embeds.some(e => e.type == "article" || e.type == "link")),
+				mentions: msg => {
+					const mentions = msg.mentions;
+					return mentions.everyone || mentions.members.size > 0 || mentions.roles.size > 0 || mentions.users.size > 0;
+				},
+				reactions: msg => msg.reactions.size > 0
+			};
 		}
 
 		async run(bot, message, args, flags) {
 			await message.delete();
 
-			const deleteLarge = args[0] > 100;
-			let toDelete = args[0];
-
-			if (args[1] || flags.some(f => f.name != "no-delete")) {
-				if (deleteLarge) return {cmdWarn: "Options are not supported for deleting from more than 100 messages at a time."};
-				const extraArg = args.slice(1).find(arg => !this.options.includes(arg));
+			const hasMsgOptions = args[1] || flags.some(f => f.name != "no-delete");
+			if (hasMsgOptions) {
+				const extraArg = args.slice(1).find(arg => !this.filters[arg]);
 				if (extraArg) {
 					if (extraArg == "text" || extraArg == "user") {
 						return {cmdWarn: `You need to use the flag version of the \`${extraArg}\` option: \`--${extraArg}\` <query>`};
@@ -580,103 +592,92 @@ module.exports = [
 						return {cmdWarn: "Invalid option specified: " + extraArg};
 					}
 				}
-				let fetchErr;
-				await message.channel.fetchMessages({limit: toDelete})
+			}
+			if (args[0] > 100) {
+				const promptRes = await promptor.prompt(message, `You are about to delete up to ${args[0]} messages from this channel.`);
+				if (promptRes.error) return {cmdWarn: promptRes.error};
+
+				const toDeleteFromPrompt = [];
+				if (message.channel.messages.has(promptRes.noticeMsg.id)) toDeleteFromPrompt.push(promptRes.noticeMsg.id);
+				if (message.channel.messages.has(promptRes.responseMsg.id)) toDeleteFromPrompt.push(promptRes.responseMsg.id);
+				await message.channel.bulkDelete(toDeleteFromPrompt);
+			}
+
+			const textFlag = flags.find(f => f.name == "text"),
+				userFlag = flags.find(f => f.name == "user");
+			const msgGroupCount = Math.ceil(args[0] / 100),
+				filters = [];
+			for (const name in this.filters) {
+				if (flags.some(f => f.name == name)) filters.push(this.filters[name]);
+			}
+			if (textFlag) filters.push(msg => msg.content.includes(textFlag.args));
+			if (userFlag) filters.push(msg => msg.author.id == userFlag.args.id);
+
+			const timestampLimit = Date.now() - 1.209e+9, // 2 weeks less 10 minutes
+				toDeleteIDs = [],
+				deleteDistrib = {};
+			let nextMessageID,
+				currMsgGroup = 0,
+				outOfTimeRange = false,
+				fetchErr;
+			while (currMsgGroup < msgGroupCount && !outOfTimeRange) {
+				await message.channel.fetchMessages({
+					limit: currMsgGroup == msgGroupCount - 1 ? args[0] % 100 : 100,
+					before: nextMessageID
+				})
 					.then(messages => {
-						let toDelete2 = messages;
-						for (const option of args.slice(1)) {
-							let filter;
-							switch (option) {
-								case "attachments":
-									filter = msg => msg.attachments.size > 0;
-									break;
-								case "bots":
-									filter = msg => msg.author.bot;
-									break;
-								case "embeds":
-									filter = msg => msg.embeds[0];
-									break;
-								case "images":
-									filter = msg => msg.embeds[0] && (msg.embeds[0].type == "image" || msg.embeds[0].image);
-									break;
-								case "invites":
-									filter = msg => /(www\.)?(discord\.(gg|me|io)|discordapp\.com\/invite)\/[0-9a-z]+/gi.test(msg.content);
-									break;
-								case "left":
-									filter = msg => msg.member == null;
-									break;
-								case "links":
-									filter = msg => /https?:\/\/\S+\.\S+/gi.test(msg.content) ||
-										(msg.embeds[0] && msg.embeds.some(e => e.type == "article" || e.type == "link"));
-									break;
-								case "mentions":
-									filter = msg => {
-										const mentions = msg.mentions;
-										return mentions.everyone || mentions.members.size > 0 || mentions.roles.size > 0 || mentions.users.size > 0;
-									};
-									break;
-								case "reactions":
-									filter = msg => msg.reactions.size > 0;
+						let newMessages = messages;
+						if (hasMsgOptions) {
+							for (const filter of filters) {
+								newMessages = newMessages.filter(m => filter(m));
 							}
-							toDelete2 = toDelete2.filter(filter);
 						}
-						const textFlag = flags.find(f => f.name == "text"),
-							userFlag = flags.find(f => f.name == "user");
-						if (textFlag) toDelete2 = toDelete2.filter(msg => msg.content.includes(textFlag.args));
-						if (userFlag) toDelete2 = toDelete2.filter(msg => msg.author.id == userFlag.args.id);
 						if (flags.some(f => f.name == "invert")) {
-							const toDeleteIDs = toDelete2.map(m => m.id);
-							toDelete = messages.map(m => m.id).filter(id => !toDeleteIDs.includes(id));
-						} else {
-							toDelete = toDelete2;
+							const oldDeleteIDs = newMessages.map(m => m.id);
+							newMessages = messages.filter(m => !oldDeleteIDs.includes(m.id));
 						}
+						for (const msg of newMessages.values()) {
+							if (msg.createdTimestamp < timestampLimit) {
+								outOfTimeRange = true;
+								return;
+							}
+							toDeleteIDs.push(msg.id);
+							deleteDistrib[msg.author.tag] = (deleteDistrib[msg.author.tag] || 0) + 1;
+						}
+						nextMessageID = messages.last().id;
 					})
 					.catch(err => fetchErr = err);
 				if (fetchErr) {
 					console.error(fetchErr);
 					return {cmdWarn: "Failed to fetch messages"};
 				}
-			} else if (deleteLarge) {
-				const promptRes = await promptor.prompt(message, `You are about to delete ${toDelete} messages from this channel.`);
-				if (promptRes) return {cmdWarn: promptRes};
 
-				toDelete += 2;
+				currMsgGroup++;
 			}
 
-			if (deleteLarge) {
-				const iters = Math.ceil(args[0] / 100);
-				let deleteCount = 0;
-				for (let i = 0; i < iters; i++) {
-					let deleteErr;
-					await message.channel.bulkDelete(i == iters - 1 ? toDelete % 100 : 100, true)
-						.then(messages => deleteCount += messages.size)
-						.catch(err => deleteErr = "Could not delete all messages: ```" + err + "```");
-					if (deleteErr) return {cmdWarn: deleteErr};
-				}
-				message.channel.send(`🗑 Deleted ${deleteCount} messages from this channel!`).then(m => {
-					if (!flags.some(f => f.name == "no-delete")) m.delete(7500);
+			// Delete the messages
+			const deleteGroupCount = Math.ceil(toDeleteIDs.length / 100);
+			for (let i = 0; i < deleteGroupCount; i++) {
+				let deleteErr;
+				await message.channel.bulkDelete(toDeleteIDs.slice(i * 100, (i + 1) * 100))
+					.catch(err => deleteErr = "Could not delete all messages: ```" + err + "```");
+				if (deleteErr) return {cmdWarn: deleteErr};
+			}
+
+			const authors = Object.keys(deleteDistrib),
+				authorDisplayCount = Math.min(authors.length, 40);
+			let breakdown = "";
+			for (let i = 0; i < authorDisplayCount; i++) {
+				breakdown += ` **\`${authors[i]}\`** - ${deleteDistrib[authors[i]]}\n`;
+			}
+			if (authorDisplayCount < authors.length) breakdown += `...and ${authors.length - 40} more.`;
+
+			message.channel.send(`🗑 Deleted ${toDeleteIDs.length} messages from this channel!` + "\n\n" + "__**Breakdown**__:\n" + breakdown)
+				.then(m => {
+					if (!flags.some(f => f.name == "no-delete")) {
+						m.delete(Math.min(500 * authors.length + 4500, 10000)).catch(() => {});
+					}
 				});
-			} else {
-				message.channel.bulkDelete(toDelete, true)
-					.then(messages => {
-						const msgAuthors = messages.map(m => m.author.tag), deleteDistrib = {};
-						let breakdown = "", deleteAfter = 4500;
-						for (const author of msgAuthors) {
-							deleteDistrib[author] = (deleteDistrib[author] || 0) + 1;
-						}
-						for (const author in deleteDistrib) {
-							breakdown += ` **\`${author}\`** - ${deleteDistrib[author]}\n`;
-							deleteAfter += 500;
-						}
-						message.channel.send(`🗑 Deleted ${messages.size} messages from this channel!` + "\n\n" + "__**Breakdown**__:\n" + breakdown)
-							.then(m => {
-								if (!flags.some(f => f.name == "no-delete")) {
-									m.delete(deleteAfter < 10000 ? deleteAfter : 10000).catch(() => {});
-								}
-							});
-					})
-					.catch(err => message.channel.send("An error has occurred while trying to purge the messages: `" + err + "`"));
-			}
 		}
 	},
 	class RemoveRoleCommand extends Command {
@@ -999,7 +1000,7 @@ module.exports = [
 
 			if (!flags.some(f => f.name == "yes")) {
 				const promptRes = await promptor.prompt(message, `You are about to softban the user **${member.user.tag}** in this server.`);
-				if (promptRes) return {cmdWarn: promptRes};
+				if (promptRes.error) return {cmdWarn: promptRes.error};
 			}
 
 			member.ban({
