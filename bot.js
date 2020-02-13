@@ -1,4 +1,4 @@
-const {Client, Collection, RichEmbed, WebhookClient} = require("discord.js"),
+const {Client, Collection, RichEmbed} = require("discord.js"),
 	{capitalize} = require("./modules/functions.js"),
 	config = require("./config.json"),
 	fs = require("fs"),
@@ -73,9 +73,6 @@ class KFSDiscordBot extends Client {
 			status: {randomIters: 0, pos: 0}
 		};
 		this.connectionRetries = 0;
-		if (config.ideaWebhookID && config.ideaWebhookToken) {
-			this.ideaWebhook = new WebhookClient(config.ideaWebhookID, config.ideaWebhookToken);
-		}
 	}
 
 	loadCommands(altdir) {
@@ -87,8 +84,14 @@ class KFSDiscordBot extends Client {
 				for (const fileName of cmdFiles) {
 					const rawCategory = fileName.split(".").shift(),
 						category = capitalize(rawCategory.replace(/-/g, " "));
+					let commandClasses;
+					try {
+						commandClasses = require(dir + rawCategory + ".js");
+					} catch(err) {
+						console.error(`The category ${category} failed to load due to:`, err instanceof Error ? err.message : err);
+						continue;
+					}
 					this.categories.push(category);
-					const commandClasses = require(dir + fileName);
 					if (commandClasses.length > 0) {
 						for (const CommandClass of commandClasses) {
 							const command = new CommandClass();

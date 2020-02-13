@@ -7,6 +7,12 @@ const {RichEmbed} = require("discord.js"),
 	math = require("mathjs"),
 	util = require("util");
 
+function getDateAndDurationString(timestamp) {
+	const dateString = new Date(timestamp).toUTCString(),
+		duration = getDuration(timestamp);
+	return dateString + ` (${duration})`;
+}
+
 module.exports = [
 	class AvatarCommand extends Command {
 		constructor() {
@@ -90,7 +96,7 @@ module.exports = [
 				.setTitle("Channel Info - " + channel.name)
 				.setColor(Math.floor(Math.random() * 16777216))
 				.setFooter("ID: " + channel.id)
-				.addField("Created at", `${new Date(channel.createdTimestamp).toUTCString()} (${getDuration(channel.createdTimestamp)})`)
+				.addField("Channel created at", getDateAndDurationString(channel.createdTimestamp))
 				.addField("Type", capitalize(channel.type), true)
 				.addField("Category Parent", channel.parent ? channel.parent.name : "None", true)
 				.addField("Accessible to everyone", accessible, true);
@@ -215,7 +221,7 @@ module.exports = [
 				.setColor(Math.floor(Math.random() * 16777216))
 				.setFooter("ID: " + emoji.id)
 				.setImage(emoji.url)
-				.addField("Emoji created at", `${new Date(emoji.createdTimestamp).toUTCString()} (${getDuration(emoji.createdTimestamp)})`)
+				.addField("Emoji created at", getDateAndDurationString(emoji.createdTimestamp))
 				.addField("Roles which can use this emoji", emoji.roles.size == 0 ? "All roles" : emoji.roles.map(role => role.name).join(", "))
 				.addField("Animated", emoji.animated ? "Yes" : "No", true)
 				.addField("Managed", emoji.managed ? "Yes" : "No", true)
@@ -400,7 +406,7 @@ module.exports = [
 				.setTitle("Role Info - " + role.name)
 				.setColor(role.color)
 				.setFooter("ID: " + role.id)
-				.addField("Role created at", `${new Date(role.createdTimestamp).toUTCString()} (${getDuration(role.createdTimestamp)})`)
+				.addField("Role created at", getDateAndDurationString(role.createdTimestamp))
 				.addField(`Members in Role [${roleMembers.size} total]`, getStatuses(roleMembers).notOffline + " Online", true)
 				.addField("Color", "Hex: " + role.hexColor + "\nDecimal: " + role.color, true)
 				.addField("Position from top", (guildRoles.length - rolePos + 1) + " / " + guildRoles.length, true)
@@ -544,14 +550,15 @@ module.exports = [
 				.setFooter(`ID: ${guild.id} | Server stats as of`)
 				.setThumbnail(guild.iconURL)
 				.setTimestamp(message.createdAt)
-				.addField("Created at", `${new Date(guild.createdTimestamp).toUTCString()} (${getDuration(guild.createdTimestamp)})`)
+				.addField("Server created at", getDateAndDurationString(guild.createdTimestamp))
 				.addField("Owner", `${guild.owner.user.tag} \`(ID ${guild.owner.id})\``)
 				.addField("Region", guild.region, true)
 				.addField("Verification", guildVerif, true)
 				.addField("Explicit Filter", guild.explicitContentFilter == 0 ? "None" : (guild.explicitContentFilter == 1 ? "Low" : "High"), true)
 				.addField("2-Factor Auth Required", guild.mfaLevel == 0 ? "No" : "Yes", true)
 				.addField(`Members [${guild.memberCount} total]`,
-					`${statuses.online} Online, ${statuses.idle} Idle, ${statuses.dnd} DND (${(statuses.notOffline / guild.memberCount * 100).toFixed(1)}%)\n` +
+					`${statuses.online} Online, ${statuses.idle} Idle, ${statuses.dnd} DND ` +
+						`(${(statuses.notOffline / guild.memberCount * 100).toFixed(1)}%) /\n` +
 						statuses.offline + " Offline\n" +
 					`${botCount} Bots (${(botCount / guild.memberCount * 100).toFixed(1)}%)`,
 					true)
@@ -607,11 +614,9 @@ module.exports = [
 				.setTitle("User Info - " + user.tag)
 				.setFooter("ID: " + user.id)
 				.setThumbnail(user.avatarURL || `https://cdn.discordapp.com/embed/avatars/${user.discriminator % 5}.png`)
-				.addField("Account created at", `${new Date(user.createdTimestamp).toUTCString()} (${getDuration(user.createdTimestamp)})`);
+				.addField("Account created at", getDateAndDurationString(user.createdTimestamp));
 
-			if (member) {
-				userEmbed.addField("Joined this server at", `${new Date(member.joinedTimestamp).toUTCString()} (${getDuration(member.joinedTimestamp)})`);
-			}
+			if (member) userEmbed.addField("Joined this server at", getDateAndDurationString(member.joinedTimestamp));
 
 			const rawPresence = (member && member.presence) || user.presence;
 			let presence;

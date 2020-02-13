@@ -1,4 +1,4 @@
-const {RichEmbed, version} = require("discord.js"),
+const {RichEmbed, WebhookClient, version} = require("discord.js"),
 	Command = require("../structures/command.js"),
 	{capitalize, getBotStats, getDuration, parsePerm} = require("../modules/functions.js"),
 	paginator = require("../utils/paginator.js"),
@@ -550,27 +550,27 @@ module.exports = [
 						true)
 					.addField("Commands",
 						"Session: " + botStats.sessionCommands.toLocaleString() +
-							` (${this.getRate(botStats.sessionCommands, processUptime)})\n` +
+							` (${this.getUnitRateString(botStats.sessionCommands, processUptime)})\n` +
 						"Total: " + botStats.totalCommands.toLocaleString() +
-							` (${this.getRate(botStats.totalCommands, duration)})`,
+							` (${this.getUnitRateString(botStats.totalCommands, duration)})`,
 						true)
 					.addField("Phone Connections",
 						"Session: " + botStats.sessionCalls.toLocaleString() +
-							` (${this.getRate(botStats.sessionCalls, processUptime)})\n` +
+							` (${this.getUnitRateString(botStats.sessionCalls, processUptime)})\n` +
 						"Total: " + botStats.totalCalls.toLocaleString() +
-							` (${this.getRate(botStats.totalCalls, duration)})`,
+							` (${this.getUnitRateString(botStats.totalCalls, duration)})`,
 						true)
 					.addField("Messages Seen",
 						"Session: " + botStats.sessionMessages.toLocaleString() +
-							` (${this.getRate(botStats.sessionMessages, processUptime)})\n` +
+							` (${this.getUnitRateString(botStats.sessionMessages, processUptime)})\n` +
 						"Total: " + botStats.totalMessages.toLocaleString() +
-							` (${this.getRate(botStats.totalMessages, duration)})`,
+							` (${this.getUnitRateString(botStats.totalMessages, duration)})`,
 						true);
 				message.channel.send(statsEmbed);
 			}
 		}
 
-		getRate(amount, duration) {
+		getUnitRateString(amount, duration) {
 			const amtPerDay = amount / duration * 8.64e+7;
 			if (amtPerDay > 43200) {
 				return (amtPerDay / 86400).toFixed(2) + "/sec";
@@ -612,17 +612,20 @@ module.exports = [
 				},
 				usage: "suggest <suggestion>"
 			});
+
+			const {ideaWebhookID, ideaWebhookToken} = require("../config.json");
+			if (ideaWebhookID && ideaWebhookToken) this.ideaWebhook = new WebhookClient(ideaWebhookID, ideaWebhookToken);
 		}
 
 		async run(bot, message, args, flags) {
-			if (!bot.ideaWebhook) return {cmdWarn: "The suggestions webhook has not been set up."};
+			if (!this.ideaWebhook) return {cmdWarn: "The suggestions webhook has not been set up."};
 			let sourceFooter;
 			if (message.guild) {
 				sourceFooter = `#${message.channel.name} (ID ${message.channel.id}) in ${message.guild.name} (ID ${message.guild.id})`;
 			} else {
 				sourceFooter = `From ${message.author.tag}`;
 			}
-			bot.ideaWebhook.send({
+			this.ideaWebhook.send({
 				embeds: [{
 					description: args[0].replace(/https?:\/\/\S+\.\S+/gi, "")
 						.replace(/(www\.)?(discord\.(gg|me|io)|discordapp\.com\/invite)\/[0-9a-z]+/gi, ""),

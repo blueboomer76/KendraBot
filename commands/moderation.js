@@ -512,19 +512,6 @@ module.exports = [
 				name: "purge",
 				description: "Deletes messages from this channel. You can specify options to refine the deleted messages",
 				aliases: ["clear", "prune"],
-				args: [
-					{
-						type: "number",
-						min: 1,
-						max: 500
-					},
-					{
-						infiniteArgs: true,
-						optional: true,
-						parseSeperately: true,
-						type: "string"
-					}
-				],
 				cooldown: {
 					time: 20000,
 					type: "user"
@@ -558,8 +545,37 @@ module.exports = [
 					user: ["MANAGE_MESSAGES"],
 					level: 0
 				},
-				usage: "purge <1-500> [attachments] [bots] [embeds] [images] [invites] [left] [links] [mentions] [reactions] " +
-					"[--user <user>] [--text <text>] [--invert] [--no-delete]"
+				subcommands: [
+					{
+						name: "message",
+						args: [
+							{
+								errorMsg: "You need to provide a valid message ID.",
+								type: "function",
+								testFunction: obj => /^\d{17,19}$/.test(obj)
+							}
+						]
+					},
+					{
+						name: "fallback",
+						args: [
+							{
+								type: "number",
+								min: 1,
+								max: 500
+							},
+							{
+								infiniteArgs: true,
+								optional: true,
+								parseSeperately: true,
+								type: "string"
+							}
+						]
+					}
+				],
+				usage: "purge <1-500> [attachments] [bots] [embeds] [images] [invites] [left] [links] [mentions] " +
+					"[reactions] [--user <user>] [--text <text>] [--invert] [--no-delete] OR\n" +
+					"purge message <message ID>"
 			});
 
 			this.filters = {
@@ -581,6 +597,10 @@ module.exports = [
 
 		async run(bot, message, args, flags) {
 			await message.delete();
+			if (args[0] == "message") {
+				this.performMessageDelete(message, args[1]);
+				return;
+			}
 
 			const hasMsgOptions = args[1] || flags.some(f => f.name != "no-delete");
 			if (hasMsgOptions) {
@@ -678,6 +698,12 @@ module.exports = [
 						m.delete(Math.min(500 * authors.length + 4500, 10000)).catch(() => {});
 					}
 				});
+		}
+
+		performMessageDelete(message, id) {
+			message.channel.fetchMessage(id)
+				.then(msg => msg.delete())
+				.catch(() => message.channel.send("⚠ A message with that ID was not found in this channel."));
 		}
 	},
 	class RemoveRoleCommand extends Command {
