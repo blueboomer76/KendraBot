@@ -21,7 +21,6 @@
 			"windows"
 		],
 		"no-case-declarations": "warn",
-		"no-console": "off",
 		"no-trailing-spaces": "error",
 		"no-unused-vars": [
 			"warn",

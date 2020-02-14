@@ -4,6 +4,11 @@
 
 # 1.X (current)
 
+## 1.6.3
+- Refactored object resolver and allowed queries with one exact match to be returned instead of a list of matches
+- Changed bot recent commands property from array to maps, using keys combining an ID and a cooldown name
+- Changed cooldown checker to check for user, channel, and guild cooldowns at the same time before executing a command
+
 ## 1.6.0
 - Removed unnecessary commands and audio dependencies from the repository (now considered as advanced topics)
 - Made many changes to the bot

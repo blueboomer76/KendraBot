@@ -7,14 +7,10 @@
 
 [![Server Widget](https://discordapp.com/api/guilds/308063187696091140/widget.png)](https://discord.gg/yB8TvWU)
 
-A multipurpose Discord bot for fun, moderation, utility, and more, written in discord.js.
+A multipurpose Discord bot for fun, moderation, utility, and more, written in discord.js. It can connect servers together and combines features from popular bots in modular files, such as the argument parser, object resolver, and image manager.
 
-## Description
-This is an actively developed Discord bot that not only has fun, moderation, and utility commands, but also has a phone command to connect servers together, and combines features from other popular bots.
-
-## How to install
-*Note: You need to have Node.js 8 or newer installed before you can start the bot, and it is recommended to have a 64-bit operating system when running it*
-
+## Installation
+*Requires Node.js 8 or newer and a 64-bit operating system.*
 1. Install a program that can clone GitHub repositories, such as Git Bash for Windows
 2. Run `git clone` with this repository's clone URL
 3. Open Command Prompt (Windows), Terminal (Mac), or other program and run `cd ../path/to/directory` or similar if necessary to move the directory to the kfs-discord-bot repository.
