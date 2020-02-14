@@ -684,6 +684,9 @@ module.exports = [
 				if (deleteErr) return {cmdWarn: deleteErr};
 			}
 
+			const noDeleteFlag = flags.some(f => f.name == "no-delete");
+			if (!hasMsgOptions && !noDeleteFlag && args[0] < 25) return;
+
 			const authors = Object.keys(deleteDistrib),
 				authorDisplayCount = Math.min(authors.length, 40);
 			let breakdown = "";
@@ -694,7 +697,7 @@ module.exports = [
 
 			message.channel.send(`🗑 Deleted ${toDeleteIDs.length} messages from this channel!` + "\n\n" + "__**Breakdown**__:\n" + breakdown)
 				.then(m => {
-					if (!flags.some(f => f.name == "no-delete")) {
+					if (!noDeleteFlag) {
 						m.delete(Math.min(500 * authors.length + 4500, 10000)).catch(() => {});
 					}
 				});

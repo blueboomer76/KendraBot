@@ -155,8 +155,6 @@ module.exports = [
 					if (commandPerms.bot.length > 0 || commandPerms.user.length > 0 || commandPerms.role || commandPerms.level > 0) {
 						helpEmbed.addField("Permissions", `Bot - ${permReq.bot}\n` + `User - ${permReq.user}${permReq.role}${permReq.level}`);
 					}
-					helpEmbed.addField("Cooldown", command.cooldown.time != 0 ?
-						`${command.cooldown.time / 1000} seconds per ${command.cooldown.type}` : "None");
 				}
 
 				if (flags.some(f => f.name == "dm")) {

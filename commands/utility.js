@@ -304,16 +304,21 @@ module.exports = [
 				message.react("✅");
 			} else {
 				const rawCodeFieldText = args[0].length < 1000 ? args[0] : args[0].slice(0, 1000) + "...",
-					resToSend = flags.some(f => f.name == "inspect") && typeof rawRes != "function" ? util.inspect(res) : res,
 					evalEmbed = new RichEmbed()
 						.setTitle("discord.js Evaluator")
 						.setColor(Math.floor(Math.random() * 16777216))
 						.setFooter("Execution took: " + evalTime)
 						.setTimestamp(message.createdAt)
 						.addField("Input Code", "```javascript" + "\n" + rawCodeFieldText + "```");
+				let resToSend = flags.some(f => f.name == "inspect") && typeof rawRes != "function" ? util.inspect(res) : res;
 
 				// Check if the result is longer than the allowed field length
-				if (resToSend != undefined && resToSend != null && resToSend.toString().length > 1000) {
+				let isLongResult = false;
+				if (resToSend != undefined && resToSend != null) {
+					resToSend = resToSend.toString().replace(new RegExp(bot.token, "g"), "[Bot Token]");
+					isLongResult = resToSend.length > 1000;
+				}
+				if (isLongResult) {
 					console.log(res);
 					evalEmbed
 						.addField(isPromise ? "Promise Result" : "Result",

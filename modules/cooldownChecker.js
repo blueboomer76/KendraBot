@@ -37,12 +37,13 @@ function findCooldown(bot, id, name, findIndex) {
 	Overrides are structured like this:
 	{
 		name: "image",
-		time: 60000
+		time: 60000,
+		type: "channel"
 	}
 */
 function addCooldown(bot, message, command, overrides) {
 	if (!overrides) overrides = {};
-	const cdID = getIDByType(message, command.cooldown.type),
+	const cdID = getIDByType(message, overrides.type || command.cooldown.type),
 		cdName = overrides.name || command.name,
 		cdTime = overrides.time || command.cooldown.time;
 
@@ -60,9 +61,8 @@ function removeCooldown(bot, id, name) {
 }
 
 module.exports = {
-	check: (bot, message, command) => {
-		const cdType = command.cooldown.type,
-			checkedCd = findCooldown(bot, getIDByType(message, cdType), command.cooldown.name || command.name, false);
+	check: (bot, message, command, type) => {
+		const checkedCd = findCooldown(bot, getIDByType(message, type), command.cooldown.name || command.name, false);
 		if (checkedCd) {
 			if (!checkedCd.notified) {
 				checkedCd.notified = true;
@@ -73,9 +73,9 @@ module.exports = {
 
 				const cdTime = ((checkedCd.resets - Date.now()) / 1000).toFixed(1);
 				toSend += ` on cooldown for **${cdTime > 0 ? cdTime : 0.1} more seconds**`;
-				if (cdType == "channel") {
+				if (type == "channel") {
 					toSend += " in this channel";
-				} else if (cdType == "guild") {
+				} else if (type == "guild") {
 					toSend += " in this server";
 				}
 				message.channel.send(toSend + "!");
